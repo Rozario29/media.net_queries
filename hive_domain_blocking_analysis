@@ -1,0 +1,108 @@
+%hybrid
+SET spark.sql.autoBroadcastJoinThreshold = -1;
+
+with union_cte AS 
+(
+
+SELECT 
+        pid, 
+        itype, 
+        cid, 
+        dn as domain,
+        rawDn as raw_domain,
+        app as is_app, 
+        ugd as device, 
+        cc AS country, 
+        adtypes, 
+        mnet_ckfl AS mnet_cookie_flag, 
+        gdpr AS gdpr, 
+        usp_status AS ccpa, 
+        mnrf AS refresh_count, 
+        sum(
+          case when pvid <> 0 then coalesce(lper, 1) end
+        ) prsi, 
+        sum(
+          case when pvid = '0' then coalesce(lper, 1) end
+        ) pub_si, 
+        sum(
+          case when toconsider = 1 
+          and pvid <> 0 then coalesce(lper, 1) end
+        ) tc1_prsi, 
+        sum(
+          case when toconsider = 1 
+          and pvid = '0' then coalesce(lper, 1) end
+        ) tc1_pub_si,
+        0 as gross_rev,
+        0 AS net_pub_rev,
+        0 AS profit
+        
+        from
+        cm.prebid_auction_participants 
+      WHERE 
+      ts BETWEEN '2023022600' 
+        AND '2023022603' 
+
+      group by 1,2,3,4,5,6,7,8,9,10,11,12,13
+        
+        
+UNION ALL
+
+
+	
+SELECT 
+		pid, 
+        itype, 
+        cid, 
+        dn as domain,
+        rawDn as raw_domain,
+        app as is_app, 
+        ugd as device, 
+        cc AS country, 
+        adtypes, 
+        mnet_ckfl AS mnet_cookie_flag, 
+        gdpr AS gdpr, 
+        usp_status AS ccpa, 
+        mnrf AS refresh_count, 
+        0 as prsi,
+		0 as pub_si,
+		0 AS tc1_prsi,
+		0 AS tc1_pub_si,
+  		bdp/1000 AS gross_rev, 
+        cbdp/1000 AS net_pub_rev, 
+        ((bdp/1000) - (cbdp/1000)) AS profit 
+        FROM cm.prebid_rendered_ad
+		WHERE
+   ts BETWEEN '2023022600' 
+        AND '2023022603' 
+
+)
+
+, group_this_mess AS 
+(
+  SELECT 
+  		pid, 
+        itype, 
+        cid, 
+        domain,
+       	raw_domain,
+        is_app, 
+       	device, 
+        country, 
+        adtypes, 
+        mnet_cookie_flag, 
+        gdpr, 
+        ccpa,  
+        refresh_count, 
+        SUM(prsi) as prsi,
+		SUM(pub_si) as pub_si,
+		SUM(tc1_prsi) as tc1_prsi,
+		SUM(tc1_pub_si) as tc1_pub_si,
+  		SUM(gross_rev) as gross_rev, 
+        SUM(net_pub_rev) as net_pub_rev, 
+        SUM(profit) as profit 
+        FROM union_cte
+  		GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13
+  		
+)
+
+SELECT * FROM group_this_mess
